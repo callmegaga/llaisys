@@ -1,5 +1,6 @@
 #include "rms_norm_cpu.hpp"
 #include "../../../utils.hpp"
+#include <cmath>
 
 template <typename T>
 void rms_norm_(T *out, const T *in, const T *weight, size_t input_rows, size_t input_cols, float eps) {

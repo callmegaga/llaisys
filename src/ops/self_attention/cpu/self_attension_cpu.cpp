@@ -1,7 +1,8 @@
 #include "self_attension_cpu.hpp"
 #include "../../../utils.hpp"
-#include <algorithm>
 #include <vector>
+#include <limits>
+#include <cmath>
 
 template <typename T>
 void self_attention_(T *attn_val, const T *q, const T *k, const T *v, size_t seqlen, size_t total_len, size_t nhead, size_t nkv_head, size_t d, size_t dv, float scale) {

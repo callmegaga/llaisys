@@ -1,5 +1,6 @@
 #include "rope_cpu.hpp"
 #include "../../../utils.hpp"
+#include <cmath>
 
 template <typename T>
 void rope_(T *out, const T *in, const int64_t *pos_ids, size_t seq_length, size_t head_nums, size_t head_dim, float theta) {

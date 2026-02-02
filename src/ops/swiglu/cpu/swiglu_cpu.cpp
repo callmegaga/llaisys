@@ -1,5 +1,6 @@
 #include "swiglu_cpu.hpp"
 #include "../../../utils.hpp"
+#include <cmath>
 
 template <typename T>
 void swiglu_(T *out, const T *gate, const T *up, size_t seqlen, size_t intermediate_size) {
