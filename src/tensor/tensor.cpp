@@ -210,9 +210,9 @@ tensor_t Tensor::permute(const std::vector<size_t> &order) const {
 tensor_t Tensor::view(const std::vector<size_t> &shape) const {
     const size_t new_numel = std::accumulate(shape.begin(), shape.end(), size_t(1), std::multiplies<size_t>());
     CHECK_ARGUMENT(new_numel == this->numel(), "cannot view tensor with different number of elements");
-	const size_t ndim_ = shape.size();
-    std::vector<ptrdiff_t> new_strides(this->ndim());
-	std::vector<size_t> new_shape = shape;
+    const size_t ndim_ = shape.size();
+    std::vector<ptrdiff_t> new_strides(ndim_);
+    std::vector<size_t> new_shape = shape;
     size_t stride = 1;
     for (size_t i = 1; i <= ndim_; i++) {
         new_strides[ndim_ - i] = stride;

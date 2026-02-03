@@ -6,7 +6,7 @@ from ..tensor import llaisysTensor_t
 class LlaisysQwen2Meta(ctypes.Structure):
     _fields_ = [
         ("dtype", llaisysDataType_t),
-        ("nplayers", c_size_t),
+        ("nlayer", c_size_t),
         ("hs", c_size_t),
         ("nh", c_size_t),
         ("nkvh", c_size_t),
@@ -16,10 +16,10 @@ class LlaisysQwen2Meta(ctypes.Structure):
         ("voc", c_size_t),
         ("epsilon", c_float),
         ("theta", c_float),
-        ("end_token", c_int64)
+        ("end_token", c_int64),
     ]
 
-class LlaisysQwen2Weight(ctypes.Structure):
+class LlaisysQwen2Weights(ctypes.Structure):
     _fields_ = [
         ("in_embed", llaisysTensor_t),
         ("out_embed", llaisysTensor_t),
@@ -38,7 +38,6 @@ class LlaisysQwen2Weight(ctypes.Structure):
         ("mlp_down_w", POINTER(llaisysTensor_t)),
     ]
 
-
 LlaisysQwen2Model = c_void_p
 
 def load_qwen2(lib):
@@ -54,7 +53,7 @@ def load_qwen2(lib):
     lib.llaisysQwen2ModelDestroy.restype = None
 
     lib.llaisysQwen2ModelWeights.argtypes = [LlaisysQwen2Model]
-    lib.llaisysQwen2ModelWeights.restype = POINTER(LlaisysQwen2Weight)
+    lib.llaisysQwen2ModelWeights.restype = POINTER(LlaisysQwen2Weights)
 
     lib.llaisysQwen2ModelInfer.argtypes = [LlaisysQwen2Model, POINTER(c_int64), c_size_t]
     lib.llaisysQwen2ModelInfer.restype = c_int64
