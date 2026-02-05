@@ -154,6 +154,7 @@ llaisys::tensor_t Qwen2Model::forward_token(int64_t token_id, size_t pos) {
     auto token_tensor = llaisys::Tensor::create({1}, LLAISYS_DTYPE_I64, _device, _device_id);
     token_tensor->load(&token_id);
 
+	// x->(1, hs)
     auto x = llaisys::Tensor::create({1, _meta.hs}, _meta.dtype, _device, _device_id);
     llaisys::ops::embedding(x, token_tensor, unwrap(_weights.in_embed));
 
@@ -164,17 +165,24 @@ llaisys::tensor_t Qwen2Model::forward_token(int64_t token_id, size_t pos) {
     const float scale = 1.0f / std::sqrt(static_cast<float>(_meta.dh));
 
     for (size_t layer = 0; layer < _meta.nlayer; layer++) {
+		// x_norm->(1, hs)
         auto x_norm = llaisys::Tensor::create({1, _meta.hs}, _meta.dtype, _device, _device_id);
         llaisys::ops::rms_norm(x_norm, x, unwrap(_weights.attn_norm_w[layer]), _meta.epsilon);
 
+		// q->(1, nh*dh), k->(1, nkvh*dh), v->(1, nkvh*dh)
+		// for qwen2 q->(1, 1536), k,v->(1, 256)
         auto q = llaisys::Tensor::create({1, _meta.nh * _meta.dh}, _meta.dtype, _device, _device_id);
         auto k = llaisys::Tensor::create({1, _meta.nkvh * _meta.dh}, _meta.dtype, _device, _device_id);
         auto v = llaisys::Tensor::create({1, _meta.nkvh * _meta.dh}, _meta.dtype, _device, _device_id);
 
+        // Wq->(1536, 1536), Wk->(256, 1536), Wv->(256, 1536)
+        // x_norm->(1, 1536), q = x_norm * Wq^T + bq
+        // q->(1, 1536), k,v->(1, 256)
         llaisys::ops::linear(q, x_norm, unwrap(_weights.attn_q_w[layer]), unwrap(_weights.attn_q_b[layer]));
         llaisys::ops::linear(k, x_norm, unwrap(_weights.attn_k_w[layer]), unwrap(_weights.attn_k_b[layer]));
         llaisys::ops::linear(v, x_norm, unwrap(_weights.attn_v_w[layer]), unwrap(_weights.attn_v_b[layer]));
 
+		// q_view->(1, 12, 128), k_view,v_view->(1, 2, 128)
         auto q_view = q->view({1, _meta.nh, _meta.dh});
         auto k_view = k->view({1, _meta.nkvh, _meta.dh});
         auto v_view = v->view({1, _meta.nkvh, _meta.dh});
@@ -182,37 +190,51 @@ llaisys::tensor_t Qwen2Model::forward_token(int64_t token_id, size_t pos) {
         auto q_rope = llaisys::Tensor::create({1, _meta.nh, _meta.dh}, _meta.dtype, _device, _device_id);
         auto k_rope = llaisys::Tensor::create({1, _meta.nkvh, _meta.dh}, _meta.dtype, _device, _device_id);
 
+		// q_rope->(1, 12, 128), k_rope->(1, 2, 128)
         llaisys::ops::rope(q_rope, q_view, pos_ids, _meta.theta);
         llaisys::ops::rope(k_rope, k_view, pos_ids, _meta.theta);
 
+        // kv_cache[layer]->(maxseq, nkvh, dh) = (131072, 2, 128)
         write_kv_cache(layer, pos, k_rope, v_view);
 
+		// k_total->(n, 2, 128), v_total->(n, 2, 128)
         auto k_total = _k_cache[layer]->slice(0, 0, pos + 1);
         auto v_total = _v_cache[layer]->slice(0, 0, pos + 1);
 
+		// attn_val->(1, nh, dh) = (1, 12, 128)
         auto attn_val = llaisys::Tensor::create({1, _meta.nh, _meta.dh}, _meta.dtype, _device, _device_id);
+		// attn_val = q @ k^T / sqrt(dh) @v = (1, 12, 128) @ (n, 2, 128)^T @ (n, 2, 128) = (1, 12, 128)
         llaisys::ops::self_attention(attn_val, q_rope, k_total, v_total, scale);
 
+		// attn_val_2d->(1, 1536)
         auto attn_val_2d = attn_val->view({1, _meta.hs});
+		// attn_out = (1, 1536) attn_o_w->(1536, 1536)
         auto attn_out = llaisys::Tensor::create({1, _meta.hs}, _meta.dtype, _device, _device_id);
         llaisys::ops::linear(attn_out, attn_val_2d, unwrap(_weights.attn_o_w[layer]), _zero_bias_hs);
 
+		// x = x + attn_out ->(1, 1536)
         auto x_attn = llaisys::Tensor::create({1, _meta.hs}, _meta.dtype, _device, _device_id);
         llaisys::ops::add(x_attn, x, attn_out);
         x = x_attn;
 
+		// mlp_norm_w->(1, 1536)
         auto mlp_norm = llaisys::Tensor::create({1, _meta.hs}, _meta.dtype, _device, _device_id);
         llaisys::ops::rms_norm(mlp_norm, x, unwrap(_weights.mlp_norm_w[layer]), _meta.epsilon);
 
+		// mlp_gate_w->(8960, 1536), mlp_up_w->(8960, 1536)
         auto gate = llaisys::Tensor::create({1, _meta.di}, _meta.dtype, _device, _device_id);
         auto up = llaisys::Tensor::create({1, _meta.di}, _meta.dtype, _device, _device_id);
+		// gate, up->(1, 8960)
         llaisys::ops::linear(gate, mlp_norm, unwrap(_weights.mlp_gate_w[layer]), _zero_bias_di);
         llaisys::ops::linear(up, mlp_norm, unwrap(_weights.mlp_up_w[layer]), _zero_bias_di);
 
+		// swiglu_out->(1, 8960)
         auto swiglu_out = llaisys::Tensor::create({1, _meta.di}, _meta.dtype, _device, _device_id);
         llaisys::ops::swiglu(swiglu_out, gate, up);
 
+		// mlp_down_w->(1536, 8960)
         auto mlp_out = llaisys::Tensor::create({1, _meta.hs}, _meta.dtype, _device, _device_id);
+		// mlp_out->(1, 1536)
         llaisys::ops::linear(mlp_out, swiglu_out, unwrap(_weights.mlp_down_w[layer]), _zero_bias_hs);
 
         auto x_mlp = llaisys::Tensor::create({1, _meta.hs}, _meta.dtype, _device, _device_id);
