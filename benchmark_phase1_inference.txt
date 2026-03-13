@@ -1,0 +1,12 @@
+
+====================================================================================================
+LLAISYS vs HuggingFace Inference Benchmark
+====================================================================================================
+Device: cpu
+Max tokens: 128
+Number of test cases: 4
+====================================================================================================
+
+Loading HuggingFace model...
+Loading model from Hugging Face: deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
+Fetching 9 files:   0%|          | 0/9 [00:00<?, ?it/s]
