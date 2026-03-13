@@ -53,14 +53,16 @@ Add `#pragma omp parallel for schedule(static)` on the `j` loop inside `linear_<
 Each thread computes an independent subset of output rows. No shared mutable state —
 the accumulator `acc` is thread-local.
 
-### Change: `xmake/cpu.lua`
+### Change: `xmake/cpu.lua` (inside `llaisys-ops-cpu` target block only)
 
 ```lua
+-- Phase 1: OpenMP
 if is_plat("windows") then
-    add_cxflags("/openmp")
+    add_cxflags("/openmp")  -- MSVC links OpenMP automatically; no ldflags needed
 else
     add_cxflags("-fopenmp")
     add_ldflags("-fopenmp")
+    -- -Wno-unknown-pragmas can be removed after this phase (omp pragmas now recognized)
 end
 ```
 
@@ -78,17 +80,18 @@ end
 Vectorize the inner `k` loop using AVX2 intrinsics:
 - Load 8 floats from `in` and `weight` with `_mm256_loadu_ps`
 - Accumulate with `_mm256_fmadd_ps` (fused multiply-add)
-- Reduce the 8-lane accumulator with horizontal add at the end
+- Reduce the 8-lane accumulator: `_mm256_hadd_ps` twice → extract low 128-bit lane → `_mm_hadd_ps` → `_mm_cvtss_f32`
 - Scalar fallback for remainder elements when `input_cols % 8 != 0`
 
 BF16/F16 paths: keep existing cast-to-float loop (no native AVX2 BF16 on Arrow Lake),
 but benefit from Phase 1 OpenMP parallelism.
 
-### Change: `xmake/cpu.lua`
+### Change: `xmake/cpu.lua` (inside `llaisys-ops-cpu` target block only)
 
 ```lua
+-- Phase 2: AVX2 + FMA
 if is_plat("windows") then
-    add_cxflags("/arch:AVX2")
+    add_cxflags("/arch:AVX2")  -- /arch:AVX2 on MSVC implicitly enables FMA; no separate flag needed
 else
     add_cxflags("-mavx2", "-mfma")
 end
@@ -108,9 +111,11 @@ end
 Replace the manual F32 loops with a single BLAS call:
 
 ```cpp
+// M=input_rows, N=weight_rows, K=input_cols
+// weight is stored as [N, K] (row-major), so ldb=K even with CblasTrans
 cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
             M, N, K, 1.0f, in, K, weight, K, 0.0f, out, N);
-// bias addition: separate vectorized loop
+// bias addition: separate loop (cblas_sgemm does not handle bias)
 for (size_t i = 0; i < M; i++)
     for (size_t j = 0; j < N; j++)
         out[i * N + j] += bias[j];
@@ -137,7 +142,7 @@ Installation: `xmake require openblas` (xmake pulls prebuilt binaries on Windows
 
 | Case | Handling |
 |---|---|
-| `bias == nullptr` | Preserved from current code; all phases check before use |
+| `bias == nullptr` | Out of scope — `op.cpp` calls `bias->data()` unconditionally; null bias is not supported by the current API |
 | `input_cols % 8 != 0` | AVX2 path: scalar loop handles remainder |
 | BF16/F16 with OpenBLAS | Falls through to Phase 1+2 path |
 | M=1 (single token, typical) | OpenMP parallelizes over N, not M — no wasted threads |
@@ -149,9 +154,11 @@ Installation: `xmake require openblas` (xmake pulls prebuilt binaries on Windows
 | Checkpoint | Command |
 |---|---|
 | Baseline | `python test/benchmark_operators.py --operators linear` |
-| After Phase 1 | same |
-| After Phase 2 | same |
+| After Phase 1 | same + `python test/benchmark_inference.py` |
+| After Phase 2 | same + `python test/benchmark_inference.py` |
 | After Phase 3 | same + `python test/benchmark_inference.py` |
+
+Set `OMP_NUM_THREADS=20` when running benchmarks for reproducible results across all phases.
 
 Correctness check after each phase: `python test/ops/linear.py`
 
