@@ -1,11 +1,8 @@
-#ifndef LLAISYS_OPS_SAMPLE_OP_HPP
-#define LLAISYS_OPS_SAMPLE_OP_HPP
+#pragma once
 
 #include "../../tensor/tensor.hpp"
 
-namespace llaisys {
-namespace ops {
-namespace sample {
+namespace llaisys::ops {
 
 void sample(
     tensor_t sampled_token,
@@ -15,8 +12,4 @@ void sample(
     float top_p
 );
 
-}  // namespace sample
-}  // namespace ops
-}  // namespace llaisys
-
-#endif  // LLAISYS_OPS_SAMPLE_OP_HPP
+} // namespace llaisys::ops
