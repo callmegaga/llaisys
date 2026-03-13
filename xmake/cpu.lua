@@ -35,6 +35,15 @@ target("llaisys-ops-cpu")
         add_cxflags("-mavx2", "-mfma")
     end
 
+    -- Phase 3: Intel MKL (F32 path only)
+    if is_plat("windows") then
+        add_includedirs("D:/ProgramData/miniconda3/Library/include")
+        add_linkdirs("D:/ProgramData/miniconda3/Library/lib")
+        add_links("mkl_intel_lp64_dll", "mkl_sequential_dll", "mkl_core_dll")
+    else
+        add_packages("openblas")
+    end
+
     add_files("../src/ops/*/cpu/*.cpp")
 
     on_install(function (target) end)
