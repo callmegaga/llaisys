@@ -28,6 +28,13 @@ target("llaisys-ops-cpu")
         add_ldflags("-fopenmp")
     end
 
+    -- Phase 2: AVX2 + FMA
+    if is_plat("windows") then
+        add_cxflags("/arch:AVX2")  -- implicitly enables FMA on MSVC
+    else
+        add_cxflags("-mavx2", "-mfma")
+    end
+
     add_files("../src/ops/*/cpu/*.cpp")
 
     on_install(function (target) end)
