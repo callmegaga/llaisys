@@ -15,7 +15,7 @@ public:
     ~Qwen2Model();
 
     LlaisysQwen2Weights *weights();
-    int64_t infer(const int64_t *token_ids, size_t ntoken);
+    int64_t infer(const int64_t *token_ids, size_t ntoken, float temperature, int top_k, float top_p);
 
 private:
     llaisysTensor_t create_weight_tensor(const std::vector<size_t> &shape);

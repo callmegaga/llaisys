@@ -37,13 +37,13 @@ __C {
         return model->model->weights();
     }
 
-    int64_t llaisysQwen2ModelInfer(struct LlaisysQwen2Model *model, int64_t *token_ids, size_t ntoken) {
+    int64_t llaisysQwen2ModelInfer(struct LlaisysQwen2Model *model, int64_t *token_ids, size_t ntoken, float temperature, int top_k, float top_p) {
         if (model == nullptr) {
             std::cerr << "[ERROR] Qwen2ModelInfer: model is null" << std::endl;
             return -1;
         }
         try {
-            return model->model->infer(token_ids, ntoken);
+            return model->model->infer(token_ids, ntoken, temperature, top_k, top_p);
         } catch (const std::exception &e) {
             std::cerr << "[ERROR] Qwen2ModelInfer: " << e.what() << std::endl;
             return -1;

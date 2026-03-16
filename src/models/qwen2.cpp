@@ -8,6 +8,7 @@
 #include "../ops/rope/op.hpp"
 #include "../ops/self_attention/op.hpp"
 #include "../ops/swiglu/op.hpp"
+#include "../ops/sample/op.hpp"
 #include "../utils.hpp"
 
 #include <cmath>
@@ -251,7 +252,7 @@ llaisys::tensor_t Qwen2Model::forward_token(int64_t token_id, size_t pos) {
     return logits_2d->view({_meta.voc});
 }
 
-int64_t Qwen2Model::infer(const int64_t *token_ids, size_t ntoken) {
+int64_t Qwen2Model::infer(const int64_t *token_ids, size_t ntoken, float temperature, int top_k, float top_p) {
     CHECK_ARGUMENT(token_ids != nullptr, "Qwen2Model: token_ids is null");
     CHECK_ARGUMENT(ntoken > 0, "Qwen2Model: ntoken must be > 0");
     CHECK_ARGUMENT(ntoken <= _meta.maxseq, "Qwen2Model: ntoken exceeds max sequence length");
@@ -267,11 +268,10 @@ int64_t Qwen2Model::infer(const int64_t *token_ids, size_t ntoken) {
 
     _past_len = ntoken;
 
-    auto max_idx = llaisys::Tensor::create({1}, LLAISYS_DTYPE_I64, _device, _device_id);
-    auto max_val = llaisys::Tensor::create({1}, _meta.dtype, _device, _device_id);
-    llaisys::ops::argmax(max_idx, max_val, logits);
+    auto sampled = llaisys::Tensor::create({1}, LLAISYS_DTYPE_I64, _device, _device_id);
+    llaisys::ops::sample(sampled, logits, temperature, top_k, top_p);
 
-    return *reinterpret_cast<int64_t *>(max_idx->data());
+    return *reinterpret_cast<int64_t *>(sampled->data());
 }
 
 } // namespace llaisys::models

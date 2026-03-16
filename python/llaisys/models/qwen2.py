@@ -203,6 +203,9 @@ class Qwen2:
                 self._model,
                 arr,
                 ctypes.c_size_t(len(tokens)),
+                ctypes.c_float(temperature),
+                ctypes.c_int(top_k),
+                ctypes.c_float(top_p),
             )
             tokens.append(int(next_token))
             if self._end_token >= 0 and next_token == self._end_token:
